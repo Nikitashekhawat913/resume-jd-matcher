@@ -1,10 +1,7 @@
-# resume_jd_matcher_streamlit.py
-# Final Big Text Premium ATS Analyzer UI
-
-# resume_jd_matcher_streamlit.py - Final Version (Improved Readability)
+# resume_jd_matcher_streamlit.py - Final Version (PyPDF2 Compatible for Deployment)
 
 import streamlit as st
-import pdfplumber
+import PyPDF2
 import re
 from collections import Counter
 
@@ -19,7 +16,6 @@ nlp = spacy.load("en_core_web_sm")
 # ------------------------------------------------
 st.set_page_config(page_title="Resume–JD Match Analyzer", layout="wide")
 
-# Global font improvements
 st.markdown("""
 <style>
 html, body, [class*="css"] {
@@ -29,15 +25,15 @@ h1, h2 {
     font-size: 34px !important;
     font-weight: 800 !important;
 }
-.stFileUploader, .stFileUploader label, .stTextArea label {
-    font-size: 20px !important;
-    font-weight: 600 !important;
+.stFileUploader, .stTextArea label {
+    font-size: 22px !important;
+    font-weight: 650 !important;
 }
 .stButton button {
-    font-size: 20px !important;
-    font-weight: 600 !important;
+    font-size: 22px !important;
+    font-weight: 700 !important;
     padding: 12px 25px !important;
-    border-radius: 8px !important;
+    border-radius: 10px !important;
 }
 .stAlert {
     font-size: 18px !important;
@@ -45,8 +41,8 @@ h1, h2 {
 </style>
 """, unsafe_allow_html=True)
 
-st.title("Resume–JD Match Analyzer")
-st.markdown("Upload your resume PDF and paste the job description to get a smart ATS-style match score and improvement tips.")
+st.title(" Resume–JD Match Analyzer")
+st.write("Upload your resume PDF and paste the job description to get a smart ATS-style match score and improvement tips.")
 
 # ------------------------------------------------
 # Skills Database
@@ -66,15 +62,13 @@ SKILL_SYNONYMS = {
     "ml":"machine learning",
     "dl":"deep learning",
     "js":"javascript",
-    "ai":"machine learning",
-    "viz":"data visualization",
-    "eda":"exploratory data analysis",
-    "gcp":"google cloud",
+    "eda":"data analysis",
     "nosql":"mongodb",
-    "dsa":"data structures",
+    "ai":"machine learning",
+    "dsa":"data structures"
 }
 
-YEAR_PATTERN = re.compile(r"(\d+)\s*\+?\s*(?:years|yrs|year)", re.IGNORECASE)
+YEAR_PATTERN = re.compile(r"(\d+)\s*\+?\s*(?:years|year|yrs)", re.IGNORECASE)
 
 # ------------------------------------------------
 # Upload UI
@@ -86,14 +80,15 @@ with col1:
     resume_text = ""
     if uploaded_file:
         try:
-            with pdfplumber.open(uploaded_file) as pdf:
-                resume_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
+            reader = PyPDF2.PdfReader(uploaded_file)
+            for page in reader.pages:
+                resume_text += page.extract_text() or ""
             st.success("Resume uploaded and text extracted.")
-        except:
+        except Exception as e:
             st.error("❌ Unable to extract text from PDF!")
 
 with col2:
-    jd_text = st.text_area("📌 Paste Job Description (JD) here", height=250)
+    jd_text = st.text_area("📌 Paste Job Description (JD) here", height=260)
 
 st.markdown("---")
 
@@ -104,8 +99,8 @@ def clean_text(t):
     return re.sub(r"\s+", " ", t.lower()).strip()
 
 def extract_skills(text):
-    text = text.lower()
     found = set()
+    text = text.lower()
     for s in COMMON_SKILLS:
         if s in text: found.add(s)
     for short, full in SKILL_SYNONYMS.items():
@@ -114,8 +109,8 @@ def extract_skills(text):
 
 def extract_keywords(text, top_k=40):
     doc = nlp(text)
-    words = [chunk.root.lemma_.lower() for chunk in doc.noun_chunks] + \
-            [ent.text.lower() for ent in doc.ents]
+    words = [chunk.root.lemma_.lower() for chunk in doc.noun_chunks]
+    words += [ent.text.lower() for ent in doc.ents]
     freq = Counter(words)
     return [w for w,_ in freq.most_common(top_k)]
 
@@ -146,44 +141,38 @@ def generate_suggestions(missing, fuzzy, jd_keywords, resume_keywords, exp_req, 
     core_missing = [m for m in missing if m not in ["communication","management"]]
     if core_missing:
         suggestions["missing_core"].append(
-            "Add / highlight core required skills: **" + ", ".join(core_missing) + "**"
-        )
+            "Add required core skills: *" + ", ".join(core_missing) + "*")
 
     tool_skills = ["aws","azure","docker","git","power bi","excel","tableau","mysql","postgresql"]
     missing_tools = [t for t in missing if t in tool_skills]
     if missing_tools:
         suggestions["missing_tools"].append(
-            "Add missing tools to boost ATS match: **" + ", ".join(missing_tools) + "**"
-        )
+            "Add missing tools: *" + ", ".join(missing_tools) + "*")
 
     if fuzzy:
         suggestions["keyword_opt"].append(
-            "Replace similar words with JD terms: **" + ", ".join(fuzzy) + "**"
-        )
+            "Match JD terms more precisely: *" + ", ".join(fuzzy) + "*")
 
     important_kw = [k for k in jd_keywords[:8] if k not in resume_keywords][:5]
     if important_kw:
         suggestions["keyword_opt"].append(
-            "Add important JD keywords: **" + ", ".join(important_kw) + "**"
-        )
+            "Include high-value keywords: *" + ", ".join(important_kw) + "*")
 
     if exp_req:
         if exp_have < exp_req:
             suggestions["experience"].append(
-                f"JD requires **{exp_req}+ yrs**. You show **{exp_have} yrs** — add project durations."
-            )
+                f"JD needs *{exp_req}+ yrs* experience. You show **{exp_have} yrs** — add project durations.")
 
-    if tfidf < 0.28:
-        suggestions["keyword_opt"].append(
-            "Improve text similarity — rephrase achievements using JD words."
-        )
+    if tfidf < 0.30:
+        suggestions["keyword_opt"].append("Increase alignment by using JD phrases in resume.")
 
-    suggestions["formatting"].append("Ensure clean ATS format — no tables, icons, images.")
-    suggestions["formatting"].append("Follow ATS structure: Skills → Experience → Projects → Education.")
+    suggestions["formatting"].append("Ensure ATS format — avoid images, tables, icons.")
+    suggestions["formatting"].append("Follow order: Skills → Experience → Projects → Education.")
+
     return suggestions
 
 # ------------------------------------------------
-# Main Match Logic
+# Match Logic
 # ------------------------------------------------
 def compute_match(resume, jd):
     jd_sk = extract_skills(jd)
@@ -191,7 +180,7 @@ def compute_match(resume, jd):
     jd_kw = extract_keywords(jd)
     rs_kw = extract_keywords(resume)
 
-    exact = set(jd_sk).intersection(rs_sk)
+    exact = set(jd_sk) & set(rs_sk)
     missing = set(jd_sk) - exact
 
     fuzzy = set([m for m in missing if any(tok in r for tok in m.split() for r in rs_kw)])
@@ -201,12 +190,9 @@ def compute_match(resume, jd):
     rs_exp_list = extract_years(resume)
     rs_exp = sum(rs_exp_list)/len(rs_exp_list) if rs_exp_list else 0
 
-    total_skills = len(jd_sk)
     score = (
-        0.45 * (len(exact)/total_skills if total_skills else 0) +
-        0.15 * (len(fuzzy)/total_skills if total_skills else 0) +
-        0.30 * tfidf +
-        0.10 * (min(1, rs_exp/jd_exp) if jd_exp else 1)
+        0.6 * (len(exact)/len(jd_sk) if jd_sk else 0) +
+        0.4 * tfidf
     ) * 100
 
     suggestions = generate_suggestions(missing, fuzzy, jd_kw, rs_kw, jd_exp, rs_exp, tfidf)
@@ -215,16 +201,13 @@ def compute_match(resume, jd):
         "score": round(score,1),
         "jd_skills": jd_sk,
         "resume_skills": rs_sk,
-        "suggestions": suggestions,
-        "rs_exp": rs_exp,
-        "jd_exp": jd_exp
+        "suggestions": suggestions
     }
 
 # ------------------------------------------------
 # Run Button
 # ------------------------------------------------
 if st.button("🔍 Analyze Match"):
-
     if uploaded_file and jd_text.strip():
         clean_r = clean_text(resume_text)
         clean_j = clean_text(jd_text)
@@ -233,26 +216,25 @@ if st.button("🔍 Analyze Match"):
             result = compute_match(clean_r, clean_j)
 
         # Score Display
-        score_html = f"""
-        <div style="width:100%; background:#003300; padding:25px; border-radius:10px;
-        text-align:center; font-size:45px; font-weight:900; color:#00FF7F;">
-        ✨ {result['score']}% Match ✨
-        </div>
-        """
-        st.markdown(score_html, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="background:#003300; padding:25px; border-radius:10px;
+            text-align:center; font-size:50px; font-weight:900; color:#00FF7F;">
+            ✨ {result['score']}% Match ✨
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        # Skills Section
         st.subheader("Skills Overview")
         st.write(f"**JD Skills:** {', '.join(result['jd_skills'])}")
         st.write(f"**Resume Skills:** {', '.join(result['resume_skills'])}")
 
-        # Suggestions
         st.subheader("💡 Smart Suggestions")
         for cat, items in result["suggestions"].items():
             if items:
                 st.write(f"🔹 **{cat.title().replace('_',' ')}**")
                 for i in items:
-                    st.write("- " + i)
-
+                    st.write("• " + i)
     else:
         st.error("⚠ Please upload resume and paste JD!")
