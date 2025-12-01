@@ -31,7 +31,7 @@ Machine Learning	Scikit-learn (TF-IDF + Cosine Similarity)
 PDF Extraction	pdfplumber
 📌 Installation
 # Clone repository
-git clone https://github.com/YOUR-USERNAME/resume-jd-matcher.git
+git clone https://github.com/Nikitashekhawat913/resume-jd-matcher.git
 cd resume-jd-matcher
 
 # Install dependencies
